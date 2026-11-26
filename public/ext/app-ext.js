@@ -258,6 +258,10 @@
 
   function viewMore(){
     const out = [sectionTitle('Mehr', 'Einstellungen und Infos')];
+    let cur = 'dark'; try { cur = localStorage.getItem('bandsix.theme') || 'dark'; } catch(e){}
+    const themeBtn = (val, label) => h('button',{class:'seg-btn'+(cur===val?' on':''), 'aria-pressed':String(cur===val), onclick:()=>{ try{ localStorage.setItem('bandsix.theme', val); }catch(e){} window.dispatchEvent(new Event('bandsix:theme')); renderHome(); }}, label);
+    out.push(sectionTitle(null, 'Darstellung'));
+    out.push(h('div',{class:'panel row'}, h('div',{class:'seg'}, themeBtn('dark','Dunkel'), themeBtn('light','Hell')), h('span',{class:'small muted'}, 'Gilt nur für diesen Browser.')));
     out.push(sectionTitle(null, 'Audio und Mikrofon'));
     out.push(settingsPanel());
     if (!DICT) out.push(h('p',{class:'small muted', style:'margin-top:8px'}, 'Spracherkennung gibt es in Chrome, Edge und Safari. In anderen Browsern sprichst du laut und tippst optional mit.'));

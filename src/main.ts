@@ -31,13 +31,22 @@ function loadScript(src: string): Promise<void> {
   });
 }
 
+/** The app uses the dark look by default; the viewer can switch to light under "Mehr". */
+export function applyTheme() {
+  let t = 'dark';
+  try { t = localStorage.getItem('bandsix.theme') || 'dark'; } catch { /* ignore */ }
+  document.documentElement.dataset.theme = t === 'light' ? 'light' : 'dark';
+}
+window.addEventListener('bandsix:theme', applyTheme);
+
 let started = false;
 async function startApp() {
   landing.hidden = true;
   appRoot.hidden = false;
+  applyTheme();
   document.body.classList.add('in-app');
   try { localStorage.setItem(ENTERED_KEY, '1'); } catch { /* private mode */ }
-  if (location.hash !== '#app') history.replaceState(null, '', '#app');
+  if (location.hash !== '#dashboard') history.replaceState(null, '', '#dashboard');
   window.scrollTo(0, 0);
   if (started) return;
   started = true;
@@ -49,10 +58,12 @@ async function startApp() {
     ...files.map((f) => loadScript(`${BASE}legacy/${f}${v}`)),
     loadScript(`${BASE}ext/app-ext.js${v}`),
   ]);
+  window.scrollTo(0, 0);
 }
 
 function showLanding() {
   appRoot.hidden = true;
+  document.documentElement.removeAttribute('data-theme');
   landing.hidden = false;
   document.body.classList.remove('in-app');
 }
@@ -69,5 +80,5 @@ window.addEventListener('bandsix:landing', () => { history.replaceState(null, ''
 
 let entered = false;
 try { entered = localStorage.getItem(ENTERED_KEY) === '1'; } catch { /* ignore */ }
-if (location.hash === '#app' || (entered && location.hash !== '#start')) void startApp();
+if (location.hash === '#dashboard' || location.hash === '#app' || (entered && location.hash !== '#start')) void startApp();
 else showLanding();

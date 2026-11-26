@@ -414,3 +414,61 @@ textarea:focus{outline:0;border-color:var(--accent);box-shadow:0 0 0 4px color-m
   .run-foot{justify-content:flex-end}
   .run-foot .row{flex-wrap:nowrap}
 }
+
+/* ================= wide screens + living background ================= */
+.wrap{max-width:min(1560px,100%);padding-left:max(clamp(16px,3.2vw,56px),env(safe-area-inset-left,0px));padding-right:max(clamp(16px,3.2vw,56px),env(safe-area-inset-right,0px))}
+.lp-wrap{max-width:1440px;padding-left:max(clamp(20px,3.6vw,64px),env(safe-area-inset-left,0px));padding-right:max(clamp(20px,3.6vw,64px),env(safe-area-inset-right,0px))}
+body.in-app .site-foot .lp-wrap{max-width:min(1560px,100%);padding-left:max(clamp(16px,3.2vw,56px),env(safe-area-inset-left,0px));padding-right:max(clamp(16px,3.2vw,56px),env(safe-area-inset-right,0px))}
+/* scale everything up on big monitors so it never looks small */
+@media (min-width:1700px){ html{zoom:1.1} }
+@media (min-width:2100px){ html{zoom:1.25} }
+@media (min-width:2500px){ html{zoom:1.4} }
+@media (min-width:3200px){ html{zoom:1.7} }
+@media (min-width:1400px){
+  .sec-tiles{gap:18px}
+  .type-grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+  .recs{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+  .passage,.cw,.q .qt{font-size:17.5px}
+  .opt{font-size:16px}
+}
+
+/* animated aurora behind the whole app */
+.app-bg{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;background:var(--bg)}
+.app-bg b{position:absolute;border-radius:50%;filter:blur(90px);opacity:var(--blob-o,.5)}
+.app-bg b:nth-child(1){width:60vmax;height:60vmax;left:-18vmax;top:-26vmax;background:#5b4bff;animation:bg1 32s ease-in-out infinite alternate}
+.app-bg b:nth-child(2){width:46vmax;height:46vmax;right:-16vmax;top:-10vmax;background:#f0508c;opacity:calc(var(--blob-o,.5) * .55);animation:bg2 38s ease-in-out infinite alternate}
+.app-bg b:nth-child(3){width:52vmax;height:52vmax;left:22vw;bottom:-34vmax;background:#16c2b0;opacity:calc(var(--blob-o,.5) * .5);animation:bg3 44s ease-in-out infinite alternate}
+.app-bg b:nth-child(4){width:30vmax;height:30vmax;right:8vw;bottom:-6vmax;background:#ff7a59;opacity:calc(var(--blob-o,.5) * .35);animation:bg2 50s ease-in-out infinite alternate-reverse}
+.app-bg::after{content:"";position:absolute;inset:0;opacity:var(--dots-o,.18);background-image:radial-gradient(color-mix(in srgb,var(--ink) 45%,transparent) 1px,transparent 1px);background-size:26px 26px;mask-image:radial-gradient(ellipse at 50% 0%,#000 0%,transparent 75%)}
+@keyframes bg1{to{transform:translate(22vw,18vh) scale(1.15)}}
+@keyframes bg2{to{transform:translate(-18vw,22vh) scale(.9)}}
+@keyframes bg3{to{transform:translate(-16vw,-20vh) scale(1.2)}}
+body.in-app{background:var(--bg)}
+body.in-app main{position:relative}
+body.in-app .site-foot{background:transparent}
+:root{--blob-o:.22;--dots-o:.12}
+:root[data-theme="dark"]{--blob-o:.5;--dots-o:.2}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--blob-o:.5;--dots-o:.2}}
+
+/* dark app: glassy surfaces so the aurora shows through */
+:root[data-theme="dark"]{
+  --bg:#070814; --surface:rgba(20,22,48,.78); --surface-2:rgba(34,37,74,.6); --line:rgba(255,255,255,.09);
+  --ring-track:rgba(255,255,255,.1);
+}
+:root[data-theme="dark"] .panel,:root[data-theme="dark"] .card,:root[data-theme="dark"] .q,:root[data-theme="dark"] .passage,:root[data-theme="dark"] .docbox,
+:root[data-theme="dark"] .rec,:root[data-theme="dark"] .stile,:root[data-theme="dark"] .tcard,:root[data-theme="dark"] .mock,:root[data-theme="dark"] .mini-card,
+:root[data-theme="dark"] .howto,:root[data-theme="dark"] .intro-type,:root[data-theme="dark"] .resume,:root[data-theme="dark"] details,:root[data-theme="dark"] .bandtile,:root[data-theme="dark"] .post{backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+:root[data-theme="dark"] .ring-in{background:#14163a}
+:root[data-theme="dark"] .opt{background:rgba(255,255,255,.03)}
+:root[data-theme="dark"] .opt:hover:not(:disabled){background:rgba(255,255,255,.07)}
+:root[data-theme="dark"] .callout{background:rgba(139,123,255,.14)}
+:root[data-theme="dark"] .stage-hero,:root[data-theme="dark"] .dash-hero,:root[data-theme="dark"] .stagecard{box-shadow:0 0 0 1px rgba(255,255,255,.08),0 30px 60px -30px rgba(0,0,0,.8)}
+:root[data-theme="dark"] .cw input{color:var(--ink)}
+:root[data-theme="dark"] .tile,:root[data-theme="dark"] .slot{background:rgba(255,255,255,.04)}
+:root[data-theme="dark"] .toast{background:#fff;color:#0b0d1f}
+
+/* segmented control */
+.seg{display:inline-flex;padding:4px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line)}
+.seg-btn{border:0;background:none;padding:7px 16px;border-radius:9px;font-weight:600;color:var(--muted)}
+.seg-btn.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+@media (prefers-reduced-motion:reduce){ .app-bg b{animation:none} }
