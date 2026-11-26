@@ -282,6 +282,100 @@
     APP.append(h('div',{class:'view view-'+TAB}, VIEWS[TAB]()));
   };
 
+  /* ---------- inner views: same visual language as the landing page ---------- */
+  const SEC_LABEL = {reading:'Reading', listening:'Listening', writing:'Writing', speaking:'Speaking'};
+  function stageBanner(opts){
+    // opts: sec, kicker, title, sub, meta (array of strings), right (node), big (string)
+    return h('section',{class:'stage-hero'+(opts.compact?' compact':'')+(opts.sec?' sec-'+opts.sec:'')},
+      h('div',{class:'aurora', 'aria-hidden':'true'}, h('b'),h('b'),h('b')),
+      h('div',{class:'stage-hero-main'},
+        h('div',{class:'stage-kicker'}, opts.sec ? h('span',{class:'stage-dot'}) : null, opts.kicker),
+        h(opts.compact?'h2':'h1',null, opts.title),
+        opts.sub ? h('p',{class:'stage-sub'}, opts.sub) : null,
+        opts.meta && opts.meta.length ? h('div',{class:'stage-meta'}, opts.meta.map(m=>h('span',null,m))) : null,
+        opts.actions || null),
+      opts.big!=null ? h('div',{class:'stage-big'}, h('b',null,opts.big), opts.bigSub? h('small',null,opts.bigSub):null) : null,
+      opts.right || null);
+  }
+
+  const origRenderUnit = renderUnit;
+  renderUnit = function(){
+    origRenderUnit();
+    if (!RUN || (RUN.mode==='exam' && RUN.showIntro)) return;
+    const wrap = APP.firstElementChild; if (!wrap) return;
+    wrap.classList.add('run-view', 'mode-'+RUN.mode);
+    const s = RUN.secs[RUN.si]; const u = curUnit(); const T = TYPES[u.type];
+    const head = wrap.firstElementChild;
+    const pos = RUN.mode==='train' ? `Aufgabe ${RUN.ui+1} von ${s.units.length}` : `Teil ${RUN.ui+1} von ${s.units.length}`;
+    const banner = stageBanner({compact:true, sec:s.key, kicker:(RUN.mode==='exam'?'Probetest · ':'Training · ')+SEC_LABEL[s.key], title:T.name, sub:T.en, meta:[pos]});
+    if (head) head.replaceWith(banner);
+    const dir = wrap.querySelector(':scope > .directions');
+    if (dir){
+      dir.classList.add('howto');
+      const tips = dir.querySelector('ul');
+      const intro = [...dir.childNodes].filter(n=>n!==tips && !(n.tagName==='B'));
+      dir.replaceChildren(
+        h('div',{class:'howto-ic', 'aria-hidden':'true'}, 'i'),
+        h('div',{class:'howto-body'}, h('b',null,'So funktioniert es'), h('p',null, intro.map(n=>n.textContent).join('').trim()), tips ? h('ul',null, [...tips.children].map(li=>h('li',null, li.textContent))) : null));
+    }
+    const foot = wrap.querySelector(':scope > .foot'); if (foot) foot.classList.add('run-foot');
+  };
+
+  const origIntro = renderSectionIntro;
+  renderSectionIntro = function(s){
+    origIntro(s);
+    const card = APP.lastElementChild; if (!card) return;
+    const items = [...card.querySelectorAll('li')].map(li=>li.textContent);
+    const ps = [...card.querySelectorAll(':scope > p')].map(p=>p.textContent);
+    const btn = card.querySelector('.btn.primary');
+    if (btn){ btn.classList.add('lg'); btn.textContent = 'Abschnitt starten →'; }
+    const types = h('div',{class:'intro-types'}, items.map(t=>{ const [name,n]=t.split(' · '); return h('div',{class:'intro-type'}, h('b',null,n||''), h('span',null,name)); }));
+    const hero = stageBanner({sec:s.key, kicker:RUN.title.split(' · ')[0], title:SEC_LABEL[s.key], sub:ps[0]||'', actions:h('div',{class:'stage-actions'}, btn)});
+    hero.classList.add('intro');
+    const wrap = h('div',{class:'intro-wrap'}, hero, types, ps[1] ? h('div',{class:'callout'}, ps[1]) : null);
+    card.replaceWith(wrap);
+  };
+
+  const origType = renderType;
+  renderType = function(t){
+    origType(t);
+    const wrap = APP.firstElementChild; if (!wrap) return;
+    wrap.classList.add('type-view');
+    const T = TYPES[t];
+    const kids = [...wrap.children];
+    // kids: [back row, title block, pills row, actions row, (note), table panel, note]
+    const pills = kids[2], actions = kids[3];
+    const meta = pills ? [...pills.querySelectorAll('.pill')].map(p=>p.textContent) : [];
+    if (actions) actions.querySelectorAll('.btn:not(.primary)').forEach(b=>b.classList.add('glass'));
+    const banner = stageBanner({sec:T.sec, kicker:SEC_LABEL[T.sec]+' · '+SEC[T.sec].de, title:T.name, sub:T.de, meta, actions:actions||null});
+    kids[1].replaceWith(banner); if (pills) pills.remove(); if (kids[0] && kids[0].querySelector('.btn')) kids[0].remove();
+    const tbl = wrap.querySelector('table'); if (tbl) tbl.closest('.panel').classList.add('item-list');
+  };
+
+  const origResults = renderResults;
+  renderResults = function(){
+    origResults();
+    const wrap = APP.firstElementChild; if (!wrap) return;
+    wrap.classList.add('results-view');
+    const head = wrap.firstElementChild;
+    if (RUN && RUN.mode==='train'){
+      const panel = wrap.querySelector(':scope > .panel');
+      const big = panel && /\d+ \/ \d+/.test(panel.firstElementChild?.textContent||'') ? panel.firstElementChild.textContent : null;
+      const sub = panel ? (panel.querySelector('p')?.textContent||'') : '';
+      const title = wrap.querySelector('h1')?.textContent || RUN.title;
+      const eb = wrap.querySelector(':scope > .eyebrow'); const h1 = wrap.querySelector(':scope > h1');
+      const banner = stageBanner({sec:RUN.secs[0].key, kicker:'Training beendet', title, sub, big, bigSub: big ? 'richtig' : null});
+      if (eb) eb.replaceWith(banner); else if (head) head.before(banner);
+      if (h1) h1.remove(); if (big && panel) panel.remove();
+      wrap.classList.remove('narrow'); wrap.style.margin='';
+      return;
+    }
+    const overall = wrap.querySelector('.bandtile.overall .v')?.textContent;
+    const overSub = wrap.querySelector('.bandtile.overall .small')?.textContent;
+    const banner = stageBanner({kicker:'Auswertung · Schätzung', title:RUN.title, sub:'Geschätztes Band aus deinen Antworten. Der echte Test ist adaptiv, rechne mit ±0,5 Band.', big:(overall && overall!=='–')?overall:null, bigSub:overSub||''});
+    if (head) head.replaceWith(banner);
+  };
+
   // The engine rendered its own home before this script loaded; replace it.
   if (VIEW==='home') renderHome(); else renderBar();
 })();
