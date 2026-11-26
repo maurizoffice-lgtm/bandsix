@@ -412,6 +412,42 @@
     repeat:'Genau hinhören und behalten: Du gibst immer längere Sätze vollständig und mit richtiger Satzmelodie wieder.',
     interview:'Spontan und flüssig sprechen: sofort beginnen, die Antwort gliedern und die Sprechzeit füllen.'
   };
+
+  /* Official scoring information from ETS (TOEFL iBT 2026 Test Specifications and Test Overview),
+     paraphrased in German. Only what ETS states; nothing invented where ETS says nothing. */
+  const ETS_SEC = {
+    reading: {points:['Jede richtige Antwort zählt 1 Punkt, es gibt keine Teilpunkte.','Adaptiv in zwei Stufen: Dein Ergebnis im ersten Teil entscheidet, ob der zweite Teil leichter oder schwerer wird. Für ein hohes Band musst du in den schwereren Teil kommen.','Das Ergebnis wird als Band von 1 bis 6 in halben Schritten gemeldet.'],
+      none:'Weitere offizielle Kriterien, etwa ob Rechtschreibfehler bei Complete the Words Teilpunkte geben oder ab wie vielen Punkten welches Band erreicht wird, veröffentlicht ETS nicht.'},
+    listening: {points:['Jede richtige Antwort zählt 1 Punkt, es gibt keine Teilpunkte.','Adaptiv in zwei Stufen wie Reading: Der erste Teil entscheidet über die Schwierigkeit des zweiten.','Du hörst jede Aufnahme nur einmal.'],
+      none:'Weitere offizielle Bewertungskriterien gibt es für Listening nicht.'},
+    writing: {points:['Build a Sentence: 1 Punkt pro richtig gebautem Satz.','Write an Email und Academic Discussion: je 0 bis 5 Punkte nach einem offiziellen Raster, bewertet automatisch per KI (Sprachverarbeitung und maschinelles Lernen).','Für die 5 verlangt ETS: Aufgabe voll erfüllt, klar und wirksam formuliert, gut ausgeführt, abwechslungsreicher Satzbau, präzise Wortwahl und fast keine Fehler außer den üblichen Flüchtigkeitsfehlern unter Zeitdruck.'],
+      none:null},
+    speaking: {points:['Jede der 11 Antworten bekommt 0 bis 5 Punkte, bewertet automatisch per KI.','Listen and Repeat: Für die 5 musst du den Satz exakt und vollständig verständlich wiederholen.','Take an Interview: Für die 5 beantwortest du die Frage vollständig, klar und flüssig. Kurze Pausen und Füllwörter wie „um“ sind normal, solange sie das Verständnis nicht stören.'],
+      none:'Konkrete Zahlen, etwa ein Mindest-Sprechtempo oder Grenzwerte für die Aussprache, nennt ETS nicht.'}
+  };
+  const ETS_TYPE = {
+    cw:'ETS misst Rechtschreibung und Wortformen: Du ergänzt vorhersehbare Lücken korrekt. 1 Punkt pro Lücke.',
+    daily:'ETS misst, ob du Alltagstexte, Listen und Tabellen sowie knappe Notizsprache verstehst. 1 Punkt pro Frage.',
+    acad:'ETS misst Hauptidee, Details, Schlussfolgerungen, Wortbedeutung im Kontext und Textaufbau. Vorwissen ist nicht nötig. 1 Punkt pro Frage.',
+    lcr:'ETS misst, ob du die wörtliche und die gemeinte Bedeutung verstehst. 1 Punkt pro Frage.',
+    lconv:'ETS misst Hauptidee, Details, Schlussfolgerungen, Absicht der Sprecher und was als Nächstes passiert. 1 Punkt pro Frage.',
+    lann:'ETS misst Hauptidee, Details und ob du vorhersagen kannst, was die Zuhörer tun sollen. 1 Punkt pro Frage.',
+    ltalk:'ETS misst Haupt- und Nebenideen, Schlussfolgerungen und den Aufbau des Vortrags. 1 Punkt pro Frage.',
+    bas:'ETS misst, ob du Satzstrukturen sicher beherrschst. 1 Punkt pro Satz, ein offizielles Raster gibt es nicht.',
+    email:'0 bis 5 Punkte. Für eine hohe Note verlangt ETS: Das Ziel der E-Mail wird erreicht und die Höflichkeitsregeln stimmen, der Text ist ausreichend ausgeführt, klar und zusammenhängend, Grammatik und Wortschatz sind vielfältig und korrekt, Rechtschreibung, Zeichensetzung und Großschreibung stimmen.',
+    disc:'0 bis 5 Punkte. Für eine hohe Note verlangt ETS: eine klare Position mit gut ausgeführtem Argument, Bezug auf die anderen Beiträge, ausreichend begründet, klar und zusammenhängend, korrekte und vielfältige Sprache. Laut ETS hat eine wirksame Antwort mindestens 100 Wörter.',
+    repeat:'0 bis 5 Punkte pro Satz. ETS bewertet, wie genau du wiederholst und wie verständlich du sprichst. Die 5 gibt es nur für eine exakte Wiederholung. Wer nur die Bedeutung trifft, bekommt weniger.',
+    interview:'0 bis 5 Punkte pro Frage. ETS bewertet: passende, zusammenhängende Ausführung, ein gutes Gesprächstempo, verständliche Aussprache mit natürlichem Rhythmus und natürlicher Satzmelodie, vielfältiger und korrekter Wortschatz und Satzbau.'
+  };
+  function etsPanel(sk){
+    const E = ETS_SEC[sk];
+    return h('details',{class:'ets-panel'},
+      h('summary',null, h('span',{class:'ets-badge'}, 'ETS'), h('span',null, 'So bewertet ETS '+SEC[sk].name), h('span',{class:'ets-more muted small'}, 'offizielle Kriterien')),
+      h('div',{class:'ets-body'},
+        h('ul',null, E.points.map(x=>h('li',null,x))),
+        E.none ? h('p',{class:'small muted'}, E.none) : null,
+        h('p',{class:'small muted'}, 'Quelle: ETS, TOEFL iBT Test Specifications und Test Overview für das Format ab 2026, sinngemäß übersetzt. Das Gesamtband ist der Durchschnitt der vier Teil-Bänder.')));
+  }
   let TRAIN_SEC = 'all';
   try { const v = sessionStorage.getItem('bandsix.trainsec'); if (v==='all' || SECS.includes(v)) TRAIN_SEC = v; } catch(e){}
   function setTrainSec(v){ TRAIN_SEC = v; try { sessionStorage.setItem('bandsix.trainsec', v); } catch(e){} }
@@ -430,11 +466,12 @@
       h('h3',null, T.name),
       h('div',{class:'tcard-txt'},
         h('div',null, h('b',null,'So läuft es'), h('p',null, T.de)),
-        h('div',null, h('b',null,'Das trainierst du'), h('p',null, TRAINS[t]||''))),
+        h('div',null, h('b',null,'Das trainierst du'), h('p',null, TRAINS[t]||'')),
+        ETS_TYPE[t] ? h('div',{class:'tcard-ets'}, h('b',null,'Offizielle Bewertung (ETS)'), h('p',null, ETS_TYPE[t])) : null),
       h('div',{class:'tcard-foot'},
         h('div',{class:'meter'}, h('i',{style:'width:'+(free.length? nDone/free.length*100:0)+'%'})),
         h('span',{class:'small muted'}, nDone+' / '+free.length+' erledigt')),
-      locked ? h('button',{class:'lock-note', onclick:()=>paywall('Mehr Aufgaben für '+T.name)}, h('span',{svg:IC_LOCK}), locked+' weitere Aufgaben im Paket') : null,
+      locked ? h('button',{class:'lock-note', onclick:()=>paywall('Mehr Aufgaben für '+T.name)}, h('span',{svg:IC_LOCK}), (locked===1?'1 weitere Aufgabe im Paket':locked+' weitere Aufgaben im Paket')) : null,
       h('div',{class:'row'}, h('button',{class:'btn small primary', onclick:()=>startRun(buildTrain(t))}, 'Üben'), h('button',{class:'btn small', onclick:()=>renderType(t)}, 'Aufgaben'), genBtn));
   }
 
@@ -462,6 +499,7 @@
           h('div',{class:'tsec-side'},
             h('div',{class:'tsec-fact'}, h('small',null,'In der Prüfung'), h('b',null, I.exam)),
             h('div',{class:'tsec-fact'}, h('small',null,'Tipp'), h('span',null, I.tip)))),
+        etsPanel(sk),
         h('div',{class:'type-grid type-grid-xl'}, types.map(typeCard))));
     }
     if (TRAIN_SEC!=='all'){

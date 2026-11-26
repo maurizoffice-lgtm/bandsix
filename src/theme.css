@@ -542,3 +542,22 @@ tr.locked td:first-child{opacity:.55}
 .diff .hit{background:color-mix(in srgb,var(--good) 14%,transparent);color:var(--good)}
 .diff .miss{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn);text-decoration:none;border-bottom:2px dotted currentColor}
 .diff .pill{margin-left:6px}
+
+/* official ETS scoring */
+.ets-panel{margin:0 0 18px;border-radius:18px;background:var(--surface);border:1px solid var(--line);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.ets-panel summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:12px;padding:16px 20px;font-weight:700}
+.ets-panel summary::-webkit-details-marker{display:none}
+.ets-panel summary::after{content:"+";margin-left:auto;font-size:22px;font-weight:400;color:var(--muted);transition:transform .2s}
+.ets-panel[open] summary::after{transform:rotate(45deg)}
+.ets-more{font-weight:500}
+.ets-badge{font:700 11px/1 var(--f-mono);letter-spacing:.06em;padding:6px 8px;border-radius:8px;background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent)}
+:root[data-theme="dark"] .ets-badge{color:#b5a9ff}
+.ets-body{padding:0 20px 18px}
+.ets-body ul{margin:0 0 10px;padding-left:20px;line-height:1.65}
+.ets-body li{margin:4px 0}
+.ets-body p{margin:6px 0 0}
+.tcard-ets{padding:12px 14px;border-radius:12px;background:color-mix(in srgb,var(--accent) 8%,transparent);border:1px solid color-mix(in srgb,var(--accent) 22%,transparent)}
+.tcard-ets b{color:var(--accent)!important}
+:root[data-theme="dark"] .tcard-ets b{color:#b5a9ff!important}
+@media (max-width:760px){ .ets-more{display:none} }
+.ets-panel{color:var(--ink)} .ets-panel summary>span:nth-child(2){color:var(--ink)}
