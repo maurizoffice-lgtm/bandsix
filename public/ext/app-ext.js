@@ -55,7 +55,7 @@
     const stats = store.get('stats', {}); let c=0, t=0;
     for (const ty of TYPE_ORDER.filter(x=>TYPES[x].sec===sec)){ const s=stats[ty]; if (s && s.t){ c+=s.c; t+=s.t; } }
     const done = store.get('done', {}); let n=0, d=0;
-    for (const ty of TYPE_ORDER.filter(x=>TYPES[x].sec===sec)){ const p=trainPool(ty); n+=p.length; d+=p.filter(x=>done[ty+':'+x.id]).length; }
+    for (const ty of TYPE_ORDER.filter(x=>TYPES[x].sec===sec)){ const p=freePool(ty); n+=p.length; d+=p.filter(x=>done[ty+':'+x.id]).length; }
     return {acc: pct(c,t), q:t, done:d, total:n};
   }
   function lastExam(){ const hist = store.get('history', []); return hist.length ? hist[hist.length-1] : null; }
@@ -82,7 +82,7 @@
       const t = w.skill.startsWith('cw-')?'cw': w.skill.startsWith('bas-')?'bas': w.skill.startsWith('lcr-')?'lcr': w.skill.startsWith('r-')?'acad':'ltalk';
       const types = t==='acad' ? ['acad','daily'] : t==='ltalk' ? ['ltalk','lconv','lann'] : [t];
       for (const ty of types){
-        const pool = trainPool(ty).filter(x=>!used.has(ty+':'+x.id)).sort((a,b)=>((done[ty+':'+a.id]||{}).d||0)-((done[ty+':'+b.id]||{}).d||0));
+        const pool = freePool(ty).filter(x=>!used.has(ty+':'+x.id)).sort((a,b)=>((done[ty+':'+a.id]||{}).d||0)-((done[ty+':'+b.id]||{}).d||0));
         const n = ty==='lcr'||ty==='bas' ? 5 : 1;
         pool.slice(0,n).forEach(x=>{ used.add(ty+':'+x.id); units.push({type:ty, id:x.id}); });
       }
@@ -100,6 +100,70 @@
     const run = offlineTargeted();
     if (run) startRun(run); else toast('Noch zu wenige Antworten. Übe erst ein paar Aufgaben im Training.');
   }
+
+
+  /* ---------- plan: free sample tasks, paid mock tests and packs ----------
+     Free: every training task we have, a few less in Listening and Writing. Mock tests are paid.
+     There is no payment yet: locked content shows what it will cost ("Preis folgt").
+     Beta testers unlock everything with a code under "Mehr". This is a client-side gate only;
+     real enforcement needs accounts and a server (see functions/README.md). */
+  const IC_LOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+  const FREE_LIMIT = {lcr:24, lconv:8, lann:4, ltalk:4, bas:6, email:2, disc:2};
+  const BETA_CODE = 'BAND6BETA';
+  function unlocked(){ try { return localStorage.getItem('bandsix.unlock')==='1'; } catch(e){ return false; } }
+  function freeIds(t){
+    const pool = trainPool(t); const lim = FREE_LIMIT[t];
+    if (unlocked() || lim==null) return new Set(pool.map(x=>x.id));
+    let n = 0; const out = new Set();
+    for (const x of pool){ if (x.gen) out.add(x.id); else if (n < lim){ out.add(x.id); n++; } }
+    return out;
+  }
+  function freePool(t){ const f = freeIds(t); return trainPool(t).filter(x=>f.has(x.id)); }
+  function isFree(t,id){ return freeIds(t).has(id); }
+  function freeTotals(){
+    const r = {}; let free=0, all=0;
+    for (const sk of SECS){ let f=0,a=0; for (const t of TYPE_ORDER.filter(x=>TYPES[x].sec===sk)){ f+=freePool(t).length; a+=trainPool(t).length; } r[sk]={free:f, all:a}; free+=f; all+=a; }
+    r.free=free; r.all=all; return r;
+  }
+
+  function closePaywall(){ const m=document.getElementById('paywall'); if (m) m.remove(); document.removeEventListener('keydown', escPaywall); }
+  function escPaywall(e){ if (e.key==='Escape') closePaywall(); }
+  function paywall(reason){
+    closePaywall();
+    const plan = (name, desc, feats, featured) => h('article',{class:'plan'+(featured?' featured':'')},
+      featured ? h('span',{class:'plan-flag'}, 'Beliebt') : null,
+      h('h3',null,name), h('p',{class:'small muted'}, desc),
+      h('div',{class:'plan-price'}, h('b',null,'Preis folgt'), h('small',null,'einmalig, kein Abo')),
+      h('ul',null, feats.map(f=>h('li',null,f))),
+      h('button',{class:'btn'+(featured?' primary':''), disabled:true}, 'Bald verfügbar'));
+    const m = h('div',{id:'paywall', class:'paywall', role:'dialog', 'aria-modal':'true', 'aria-labelledby':'pw-title', onclick:e=>{ if (e.target.id==='paywall') closePaywall(); }},
+      h('div',{class:'paywall-card'},
+        h('button',{class:'pw-close', 'aria-label':'Schließen', onclick:closePaywall}, '×'),
+        h('div',{class:'eyebrow'}, 'Mehr üben'),
+        h('h2',{id:'pw-title'}, reason || 'Diese Aufgabe gehört zu einem Paket.'),
+        h('p',{class:'muted'}, 'Die Gratis-Aufgaben bleiben dauerhaft frei. Probetests und zusätzliche Aufgaben kannst du bald für wenig Geld dazukaufen. Bezahlen ist in der Beta noch nicht möglich.'),
+        h('div',{class:'plans'},
+          plan('Probetest', 'Ein kompletter Test in voller Länge mit Timer und Band-Schätzung.', ['Reading, Listening, Writing, Speaking', 'Auswertung nach Fragetyp', 'Aufgaben, die du noch nicht kennst']),
+          plan('Komplettpaket', 'Alle Probetests und alle Aufgaben, auch neue, sobald sie erscheinen.', ['Alle Probetests', 'Alle Übungsaufgaben', 'Neue Aufgabenpakete inklusive'], true),
+          plan('Aufgabenpaket', 'Neue Übungsaufgaben für einen Bereich deiner Wahl.', ['Neue Aufgaben je Bereich', 'Mit Lösung und Erklärung', 'Für deine Schwächen'])),
+        h('p',{class:'small muted', style:'margin-top:14px'}, 'Du testest Bandsix in der Beta? Gib deinen Beta-Code unter „Mehr“ ein, dann ist alles freigeschaltet.')));
+    document.body.append(m); document.addEventListener('keydown', escPaywall);
+    const c = m.querySelector('.pw-close'); if (c) c.focus();
+  }
+
+  // Gate every run in one place: mock tests need a pack, training runs keep only free tasks.
+  const origStartRun = startRun;
+  startRun = function(run){
+    if (run && run.mode==='exam' && !unlocked()){ paywall('Probetests gibt es als Paket.'); return; }
+    if (run && run.mode==='train' && !unlocked()){
+      const secs = run.secs.map(s=>({...s, units:s.units.filter(u=>isFree(u.type,u.id))})).filter(s=>s.units.length);
+      if (!secs.length){ paywall('Diese Aufgabe gehört zu einem Aufgabenpaket.'); return; }
+      run = {...run, secs};
+    }
+    return origStartRun(run);
+  };
+  const origBuildTrain = buildTrain;
+  buildTrain = function(type, ids){ return origBuildTrain(type, ids || freePool(type).map(x=>x.id)); };
 
   /* ---------- views ---------- */
   function viewStart(){
@@ -127,11 +191,15 @@
       h('div',{class:'aurora', 'aria-hidden':'true'}, h('b'),h('b'),h('b')),
       h('div',{class:'dash-hero-main'},
         h('div',{class:'eyebrow'}, greeting()),
-        h('h1',null, ex ? 'Weiter Richtung Band 6.' : 'Bereit für deinen ersten Probetest?'),
-        h('p',{class:'lead'}, ex ? `Dein letzter Probetest: ${ex.title}. Trainiere jetzt gezielt die Aufgabentypen, die dich am meisten kosten.` : 'Ein kompletter Probetest zeigt dir in 85 Minuten, wo du stehst. Danach trainierst du gezielt deine Schwächen.'),
+        h('h1',null, ex ? 'Weiter Richtung Band 6.' : unlocked() ? 'Bereit für deinen ersten Probetest?' : 'Trainiere jeden Aufgabentyp. Kostenlos.'),
+        h('p',{class:'lead'}, ex ? `Dein letzter Probetest: ${ex.title}. Trainiere jetzt gezielt die Aufgabentypen, die dich am meisten kosten.` : unlocked() ? 'Ein kompletter Probetest zeigt dir in 85 Minuten, wo du stehst. Danach trainierst du gezielt deine Schwächen.' : `${freeTotals().free} Gratis-Aufgaben aus allen vier Teilen, mit Lösung und Erklärung auf Deutsch. Wenn du bereit bist, misst du dich in einem Probetest in voller Länge.`),
         h('div',{class:'row'},
-          h('button',{class:'btn primary lg', onclick:()=>{ const m = MOCKS.find(m=>!store.get('history',[]).some(x=>x.title && x.title.includes(m.name))) || MOCKS[0]; startRun(buildMock(m)); }}, ex ? 'Nächsten Probetest starten' : 'Probetest starten'),
-          h('button',{class:'btn glass lg', onclick:()=>setTab('training')}, 'Zum Training'))),
+          unlocked()
+            ? h('button',{class:'btn primary lg', onclick:()=>{ const m = MOCKS.find(m=>!store.get('history',[]).some(x=>x.title && x.title.includes(m.name))) || MOCKS[0]; startRun(buildMock(m)); }}, ex ? 'Nächsten Probetest starten' : 'Probetest starten')
+            : h('button',{class:'btn primary lg', onclick:()=>setTab('training')}, 'Kostenlos üben'),
+          unlocked()
+            ? h('button',{class:'btn glass lg', onclick:()=>setTab('training')}, 'Zum Training')
+            : h('button',{class:'btn glass lg', onclick:()=>setTab('tests')}, 'Probetests ansehen'))),
       h('div',{class:'dash-hero-side'},
         h('div',{class:'hero-band'}, h('div',{class:'eyebrow'}, 'Geschätztes Band'), h('div',{class:'big'}, band), h('div',{class:'small'}, ex && ex.overall!=null ? '≈ '+CONC[ex.overall]+' von 120' : 'nach deinem ersten Probetest')),
         countdown)));
@@ -155,7 +223,7 @@
     }
     if (mist.length) recs.push(h('article',{class:'rec'}, h('div',{class:'rec-tag warn'}, 'Fehlerheft'), h('h3',null, mist.length+' Aufgaben zum Wiederholen'), h('p',{class:'muted small'}, 'Sie verschwinden, sobald du sie besser löst.'), h('button',{class:'btn small', onclick:()=>startRun(buildMistakeRun())}, 'Fehler wiederholen')));
     const done = store.get('done', {});
-    const nextType = TYPE_ORDER.map(t=>({t, open: trainPool(t).filter(x=>!done[t+':'+x.id]).length, n: trainPool(t).length})).filter(x=>x.open>0).sort((a,b)=>(b.open/b.n)-(a.open/a.n))[0];
+    const nextType = TYPE_ORDER.map(t=>({t, open: freePool(t).filter(x=>!done[t+':'+x.id]).length, n: freePool(t).length})).filter(x=>x.open>0).sort((a,b)=>(b.open/b.n)-(a.open/a.n))[0];
     if (nextType) recs.push(h('article',{class:'rec'}, h('div',{class:'rec-tag'}, SEC[TYPES[nextType.t].sec].name), h('h3',null, TYPES[nextType.t].name), h('p',{class:'muted small'}, nextType.open+' von '+nextType.n+' Aufgaben noch offen.'), h('button',{class:'btn small', onclick:()=>startRun(buildTrain(nextType.t))}, 'Jetzt üben')));
     if (recs.length){ out.push(sectionTitle('Heute', 'Empfohlen für dich')); out.push(h('div',{class:'recs'}, recs)); }
 
@@ -163,7 +231,7 @@
     out.push(sectionTitle('Überblick', 'Deine vier Teile'));
     out.push(h('div',{class:'sec-tiles'}, SECS.map(sk=>{
       const s = secStats(sk);
-      return h('button',{class:'stile sec-'+sk, onclick:()=>{ TAB='training'; try{sessionStorage.setItem('bandsix.tab','training');}catch(e){} renderHome(); setTimeout(()=>{ const el=document.getElementById('sec-'+sk); if (el) el.scrollIntoView({behavior:'smooth', block:'start'}); },30); }},
+      return h('button',{class:'stile sec-'+sk, onclick:()=>{ setTrainSec(sk); setTab('training'); }},
         h('div',{class:'stile-top'}, h('span',{class:'stile-ic', svg:SEC[sk].ic}), h('span',{class:'stile-name'}, SEC[sk].name)),
         ring(s.acc, s.acc==null?'–':s.acc+'%', s.q? s.q+' Fragen':'noch offen'),
         h('div',{class:'stile-foot'}, h('div',{class:'meter'}, h('i',{style:'width:'+(s.total? s.done/s.total*100:0)+'%'})), h('span',{class:'small muted'}, s.done+' / '+s.total+' Aufgaben')));
@@ -173,6 +241,10 @@
 
   function viewTests(){
     const out = [sectionTitle('Probetests', 'Unter echten Bedingungen', 'Reading 50 Fragen · Listening 47 · Writing 12 · Speaking 11. Timer nach offiziellen Vorgaben, Audio nur einmal, Auswertung am Ende. Diese Aufgaben kommen im Training nicht vor.')];
+    const open = unlocked();
+    if (!open) out.push(h('div',{class:'offer'},
+      h('div',null, h('div',{class:'eyebrow'}, 'Pakete'), h('h3',null,'Probetests gibt es als Paket.'), h('p',{class:'muted'}, 'Ein Probetest misst dich in voller Länge, mit Timer und Band-Schätzung am Ende. Das Training bleibt kostenlos. Bezahlen ist in der Beta noch nicht möglich, der Preis folgt.')),
+      h('button',{class:'btn primary', onclick:()=>paywall('Probetests gibt es als Paket.')}, 'Pakete ansehen')));
     const hist = store.get('history', []);
     out.push(h('div',{class:'mock-grid'}, MOCKS.map((m,i)=>{
       const last = hist.slice().reverse().find(x=>x.title && x.title.includes(m.name));
@@ -180,39 +252,104 @@
       return h('article',{class:'mock'},
         h('div',{class:'mock-art', 'aria-hidden':'true'}, h('span',null, m.id)),
         h('div',{class:'mock-body'},
-          h('div',{class:'row', style:'justify-content:space-between'}, h('h3',null,m.name), h('span',{class:'pill'}, 'ca. 85 Min')),
+          h('div',{class:'row', style:'justify-content:space-between'}, h('h3',null,m.name), h('span',{class:'row', style:'gap:6px'}, open ? null : h('span',{class:'pill lock'}, h('span',{svg:IC_LOCK}), 'Paket'), h('span',{class:'pill'}, 'ca. 85 Min'))),
           last && last.overall!=null ? h('p',{class:'small'}, 'Zuletzt: ', h('b',null,'Band '+last.overall.toFixed(1)), h('span',{class:'muted'}, ' · '+new Date(last.date).toLocaleDateString('de-DE'))) : h('p',{class:'small muted'}, 'Noch nicht gemacht.'),
           kn.length ? h('p',{class:'small', style:'color:var(--warn)'}, kn.length+' Aufgaben kennst du schon aus früheren Übungen.') : h('p',{class:'small', style:'color:var(--good)'}, 'Alle Aufgaben sind für dich neu.'),
-          h('button',{class:'btn primary', onclick:()=>startRun(buildMock(m))}, 'Kompletten Test starten'),
-          h('div',{class:'mock-parts'}, SECS.map(k=>h('button',{class:'chip-btn sec-'+k, onclick:()=>startRun(buildMock(m,k))}, h('span',{svg:SEC[k].ic}), SEC[k].name)))));
+          open ? h('button',{class:'btn primary', onclick:()=>startRun(buildMock(m))}, 'Kompletten Test starten')
+               : h('button',{class:'btn primary', onclick:()=>paywall(m.name+' freischalten')}, h('span',{class:'btn-ic', svg:IC_LOCK}), 'Freischalten · Preis folgt'),
+          open ? h('div',{class:'mock-parts'}, SECS.map(k=>h('button',{class:'chip-btn sec-'+k, onclick:()=>startRun(buildMock(m,k))}, h('span',{svg:SEC[k].ic}), SEC[k].name)))
+               : h('div',{class:'mock-parts'}, SECS.map(k=>h('span',{class:'chip-btn sec-'+k, style:'cursor:default'}, h('span',{svg:SEC[k].ic}), SEC[k].name)))));
     })));
     out.push(h('div',{class:'callout'}, h('b',null,'Tipp: '), 'Plane für einen kompletten Test 85 Minuten ohne Unterbrechung ein und nutze Kopfhörer. Du kannst jederzeit ins Hauptmenü und später fortsetzen.'));
     return out;
   }
 
+  /* What each part looks like in the real test and what each task type trains. */
+  const SEC_INFO = {
+    reading: {exam:'50 Fragen · ca. 27–30 Min · adaptiv',
+      text:'Reading beginnt mit einem Startblock. Je nachdem, wie gut du dort bist, folgt ein leichterer oder schwererer zweiter Block. Den größten Anteil hat Complete the Words mit rund 30 Lücken, dazu kommen kurze Alltagstexte und ein akademischer Text.',
+      tip:'Complete the Words zuerst zügig lösen: Dort holst du die meisten Punkte pro Minute. Bei langen Texten nicht festbeißen.'},
+    listening: {exam:'47 Fragen · ca. 18–29 Min · adaptiv',
+      text:'Auch Listening passt sich deinem Niveau an. Du hörst jede Aufnahme nur einmal, mit Akzenten aus den USA, Großbritannien und Australien. Die meisten Fragen sind kurze Reaktionen (Choose a Response), dazu kommen Gespräche, Durchsagen und Ausschnitte aus Vorlesungen.',
+      tip:'Kein Zurückspulen: Notiere zwei, drei Stichworte und achte auf Signalwörter wie but, actually oder instead.'},
+    writing: {exam:'12 Aufgaben · 23 Min',
+      text:'Zuerst baust du zehn Sätze aus Wortgruppen (Build a Sentence). Danach schreibst du eine E-Mail in 7 Minuten und einen Beitrag zu einer Online-Diskussion in 10 Minuten. E-Mail und Diskussion werden je mit 0 bis 5 bewertet.',
+      tip:'E-Mail: alle drei Punkte abhaken. Diskussion: klare Position, Bezug auf einen Beitrag, neues Argument mit Beispiel.'},
+    speaking: {exam:'11 Aufgaben · ca. 8 Min',
+      text:'Du sprichst sieben Sätze nach, die immer länger werden, und beantwortest vier Interviewfragen mit je 45 Sekunden Sprechzeit und ohne Vorbereitungszeit. Jede Antwort wird mit 0 bis 5 bewertet.',
+      tip:'Bei Listen and Repeat zählt Vollständigkeit. Im Interview sofort anfangen und die 45 Sekunden nutzen.'}
+  };
+  const TRAINS = {
+    cw:'Wortschatz, Rechtschreibung und Grammatik im Zusammenhang. Du erkennst aus dem Kontext, welches Wort passt, und schreibst es korrekt zu Ende.',
+    daily:'Schnelles, gezieltes Lesen: den Zweck eines Textes erkennen, Details finden und zwischen den Zeilen lesen.',
+    acad:'Akademisches Lesen: Hauptidee, Details, Schlussfolgerungen, Wortbedeutung im Kontext und warum der Autor etwas erwähnt.',
+    lcr:'Natürlich reagieren: Du verstehst Absicht und Tonfall eines Satzes, auch wenn die passende Antwort indirekt ist.',
+    lconv:'Gesprächen folgen: Problem, Lösung und nächster Schritt, auch bei Umgangssprache und schnellem Tempo.',
+    lann:'Durchsagen verstehen: Zweck und wichtige Details wie Zeiten, Orte und Änderungen.',
+    ltalk:'Vorlesungen folgen: Hauptthema, Aufbau, Beispiele und die Haltung des Sprechers erkennen.',
+    bas:'Satzbau: Wortstellung, Fragen und Nebensätze sicher bilden, und die Wortgruppe erkennen, die nicht passt.',
+    email:'Zielgerichtet schreiben: alle Punkte abdecken, den passenden Ton treffen und unter Zeitdruck klar gliedern.',
+    disc:'Argumentieren: eine klare Position beziehen, auf andere Beiträge eingehen und ein eigenes Argument mit Beispiel bringen.',
+    repeat:'Genau hinhören und behalten: Du gibst immer längere Sätze vollständig und mit richtiger Satzmelodie wieder.',
+    interview:'Spontan und flüssig sprechen: sofort beginnen, die Antwort gliedern und die Sprechzeit füllen.'
+  };
+  let TRAIN_SEC = 'all';
+  try { const v = sessionStorage.getItem('bandsix.trainsec'); if (v==='all' || SECS.includes(v)) TRAIN_SEC = v; } catch(e){}
+  function setTrainSec(v){ TRAIN_SEC = v; try { sessionStorage.setItem('bandsix.trainsec', v); } catch(e){} }
+
+  function typeCard(t){
+    const T=TYPES[t], sk=T.sec; const done = store.get('done', {}); const st = store.get('stats', {})[t];
+    const all = trainPool(t); const free = freePool(t); const nDone = free.filter(x=>done[t+':'+x.id]).length;
+    const locked = all.length - free.length;
+    const canGen = GEN[t] && SAMPLE && !AI_OFF;
+    const genBtn = canGen ? h('button',{class:'btn small ghost', title:'Neue Aufgaben von der KI schreiben lassen', onclick:async()=>{ genBtn.disabled=true; genBtn.textContent='Erzeuge …'; try{ const ids=await generate(t); toast(ids.length+' neue KI-Aufgaben erstellt'); startRun(buildTrain(t, ids)); }catch(e){ genBtn.disabled=false; genBtn.textContent='+ Neue (KI)'; toast('Erzeugen hat nicht geklappt, bitte nochmal versuchen.'); } }}, '+ Neue (KI)') : null;
+    return h('article',{class:'tcard tcard-xl sec-'+sk},
+      h('div',{class:'tcard-head'}, h('span',{class:'tcard-ic', svg:SEC[sk].ic}),
+        h('span',{class:'row', style:'gap:6px'},
+          st && st.t ? h('span',{class:'pill '+(st.c/st.t>=.85?'good':st.c/st.t>=.7?'warn':'bad')}, Math.round(st.c/st.t*100)+' %') : null,
+          h('span',{class:'pill free'}, free.length+' gratis'))),
+      h('h3',null, T.name),
+      h('div',{class:'tcard-txt'},
+        h('div',null, h('b',null,'So läuft es'), h('p',null, T.de)),
+        h('div',null, h('b',null,'Das trainierst du'), h('p',null, TRAINS[t]||''))),
+      h('div',{class:'tcard-foot'},
+        h('div',{class:'meter'}, h('i',{style:'width:'+(free.length? nDone/free.length*100:0)+'%'})),
+        h('span',{class:'small muted'}, nDone+' / '+free.length+' erledigt')),
+      locked ? h('button',{class:'lock-note', onclick:()=>paywall('Mehr Aufgaben für '+T.name)}, h('span',{svg:IC_LOCK}), locked+' weitere Aufgaben im Paket') : null,
+      h('div',{class:'row'}, h('button',{class:'btn small primary', onclick:()=>startRun(buildTrain(t))}, 'Üben'), h('button',{class:'btn small', onclick:()=>renderType(t)}, 'Aufgaben'), genBtn));
+  }
+
   function viewTraining(){
     const out = [sectionTitle('Training', 'Nach Aufgabentyp üben', 'Ohne Zeitdruck. Nach jeder Aufgabe siehst du die Lösung mit Erklärung auf Deutsch, beim Hören auch das Transkript.')];
-    const mist = mistakeKeys(); const weak = weaknesses();
-    const top = h('div',{class:'train-top'});
-    if (mist.length) top.append(h('div',{class:'mini-card'}, h('div',null, h('b',null,'Fehlerheft'), h('div',{class:'small muted'}, mist.length+' Aufgaben zum Wiederholen')), h('button',{class:'btn small primary', onclick:()=>startRun(buildMistakeRun())}, 'Wiederholen')));
-    if (weak.length){ const b=h('button',{class:'btn small', onclick:()=>startTargeted(b)}, 'Starten'); top.append(h('div',{class:'mini-card'}, h('div',null, h('b',null,'Schwächen gezielt trainieren'), h('div',{class:'small muted'}, weak.slice(0,3).map(w=>SKILL_DE[w.skill]||w.skill).join(' · '))), b)); }
-    if (top.childElementCount) out.push(top);
-    const done = store.get('done', {}); const stats = store.get('stats', {});
-    for (const sk of SECS){
-      out.push(h('div',{class:'type-sec', id:'sec-'+sk}, h('span',{class:'secchip sec-'+sk}, SEC[sk].name), h('span',{class:'muted small'}, SEC[sk].de)));
-      out.push(h('div',{class:'type-grid'}, TYPE_ORDER.filter(t=>TYPES[t].sec===sk).map(t=>{
-        const T=TYPES[t]; const pool=trainPool(t); const nDone=pool.filter(x=>done[t+':'+x.id]).length; const st=stats[t];
-        const canGen = GEN[t] && SAMPLE && !AI_OFF;
-        const genBtn = canGen ? h('button',{class:'btn small ghost', title:'Neue Aufgaben von der KI schreiben lassen', onclick:async()=>{ genBtn.disabled=true; genBtn.textContent='Erzeuge …'; try{ const ids=await generate(t); toast(ids.length+' neue KI-Aufgaben erstellt'); startRun(buildTrain(t, ids)); }catch(e){ genBtn.disabled=false; genBtn.textContent='+ Neue (KI)'; toast('Erzeugen hat nicht geklappt, bitte nochmal versuchen.'); } }}, '+ Neue (KI)') : null;
-        return h('article',{class:'tcard sec-'+sk},
-          h('div',{class:'tcard-head'}, h('span',{class:'tcard-ic', svg:SEC[sk].ic}), st && st.t ? h('span',{class:'pill '+(st.c/st.t>=.85?'good':st.c/st.t>=.7?'warn':'bad')}, Math.round(st.c/st.t*100)+' %') : null),
-          h('h3',null, T.name),
-          h('p',{class:'small muted'}, T.de),
-          h('div',{class:'tcard-foot'},
-            h('div',{class:'meter'}, h('i',{style:'width:'+(pool.length? nDone/pool.length*100:0)+'%'})),
-            h('span',{class:'small muted'}, nDone+' / '+pool.length)),
-          h('div',{class:'row'}, h('button',{class:'btn small primary', onclick:()=>startRun(buildTrain(t))}, 'Üben'), h('button',{class:'btn small', onclick:()=>renderType(t)}, 'Aufgaben'), genBtn));
-      })));
+    const seg = (v,label) => h('button',{class:'seg-btn'+(TRAIN_SEC===v?' on':'')+(v!=='all'?' sec-'+v:''), 'aria-pressed':String(TRAIN_SEC===v), onclick:()=>{ setTrainSec(v); renderHome(); window.scrollTo({top:0}); }}, v!=='all'? h('span',{class:'seg-dot'}):null, label);
+    out.push(h('div',{class:'train-nav'}, h('div',{class:'seg seg-lg'}, seg('all','Alle Bereiche'), SECS.map(k=>seg(k, SEC[k].name)))));
+    if (TRAIN_SEC==='all'){
+      const mist = mistakeKeys(); const weak = weaknesses();
+      const top = h('div',{class:'train-top'});
+      if (mist.length) top.append(h('div',{class:'mini-card'}, h('div',null, h('b',null,'Fehlerheft'), h('div',{class:'small muted'}, mist.length+' Aufgaben zum Wiederholen')), h('button',{class:'btn small primary', onclick:()=>startRun(buildMistakeRun())}, 'Wiederholen')));
+      if (weak.length){ const b=h('button',{class:'btn small', onclick:()=>startTargeted(b)}, 'Starten'); top.append(h('div',{class:'mini-card'}, h('div',null, h('b',null,'Schwächen gezielt trainieren'), h('div',{class:'small muted'}, weak.slice(0,3).map(w=>SKILL_DE[w.skill]||w.skill).join(' · '))), b)); }
+      if (top.childElementCount) out.push(top);
+    }
+    const secs = TRAIN_SEC==='all' ? SECS : [TRAIN_SEC];
+    for (const sk of secs){
+      const I = SEC_INFO[sk]; const types = TYPE_ORDER.filter(t=>TYPES[t].sec===sk);
+      out.push(h('section',{class:'tsec sec-'+sk, id:'sec-'+sk},
+        h('div',{class:'tsec-hero'},
+          h('div',{class:'aurora', 'aria-hidden':'true'}, h('b'),h('b'),h('b')),
+          h('div',{class:'tsec-main'},
+            h('div',{class:'stage-kicker'}, h('span',{class:'stage-dot'}), SEC[sk].de+' · '+types.length+' Aufgabentypen'),
+            h('h2',null, SEC[sk].name),
+            h('p',{class:'stage-sub'}, I.text)),
+          h('div',{class:'tsec-side'},
+            h('div',{class:'tsec-fact'}, h('small',null,'In der Prüfung'), h('b',null, I.exam)),
+            h('div',{class:'tsec-fact'}, h('small',null,'Tipp'), h('span',null, I.tip)))),
+        h('div',{class:'type-grid type-grid-xl'}, types.map(typeCard))));
+    }
+    if (TRAIN_SEC!=='all'){
+      const i = SECS.indexOf(TRAIN_SEC); const nx = SECS[(i+1)%SECS.length];
+      out.push(h('div',{class:'row', style:'justify-content:space-between;margin-top:28px'},
+        h('button',{class:'btn ghost', onclick:()=>{ setTrainSec('all'); renderHome(); window.scrollTo({top:0}); }}, 'Alle Bereiche anzeigen'),
+        h('button',{class:'btn', onclick:()=>{ setTrainSec(nx); renderHome(); window.scrollTo({top:0}); }}, 'Weiter zu '+SEC[nx].name+' →')));
     }
     return out;
   }
@@ -262,6 +399,14 @@
     const themeBtn = (val, label) => h('button',{class:'seg-btn'+(cur===val?' on':''), 'aria-pressed':String(cur===val), onclick:()=>{ try{ localStorage.setItem('bandsix.theme', val); }catch(e){} window.dispatchEvent(new Event('bandsix:theme')); renderHome(); }}, label);
     out.push(sectionTitle(null, 'Darstellung'));
     out.push(h('div',{class:'panel row'}, h('div',{class:'seg'}, themeBtn('dark','Dunkel'), themeBtn('light','Hell')), h('span',{class:'small muted'}, 'Gilt nur für diesen Browser.')));
+    out.push(sectionTitle(null, 'Beta-Zugang', unlocked() ? 'Alles ist freigeschaltet: Probetests und alle Aufgaben.' : 'Mit einem Beta-Code schaltest du Probetests und alle Aufgaben frei.'));
+    if (unlocked()) out.push(h('div',{class:'panel row'}, h('span',{class:'pill good'}, 'Freigeschaltet'), h('span',{style:'flex:1'}), h('button',{class:'btn ghost', onclick:()=>{ try{ localStorage.removeItem('bandsix.unlock'); }catch(e){} renderHome(); }}, 'Gratis-Ansicht testen')));
+    else {
+      const ci = h('input',{type:'text', class:'date-in', placeholder:'Beta-Code', 'aria-label':'Beta-Code', autocomplete:'off', autocapitalize:'characters'});
+      const go = () => { if (ci.value.trim().toUpperCase()===BETA_CODE){ try{ localStorage.setItem('bandsix.unlock','1'); }catch(e){} toast('Alles freigeschaltet.'); renderHome(); } else toast('Dieser Code passt nicht.'); };
+      ci.addEventListener('keydown', e=>{ if (e.key==='Enter') go(); });
+      out.push(h('div',{class:'panel row'}, ci, h('button',{class:'btn primary', onclick:go}, 'Freischalten')));
+    }
     out.push(sectionTitle(null, 'Audio und Mikrofon'));
     out.push(settingsPanel());
     if (!DICT) out.push(h('p',{class:'small muted', style:'margin-top:8px'}, 'Spracherkennung gibt es in Chrome, Edge und Safari. In anderen Browsern sprichst du laut und tippst optional mit.'));
@@ -354,6 +499,22 @@
     const banner = stageBanner({sec:T.sec, kicker:SEC_LABEL[T.sec]+' · '+SEC[T.sec].de, title:T.name, sub:T.de, meta, actions:actions||null});
     kids[1].replaceWith(banner); if (pills) pills.remove(); if (kids[0] && kids[0].querySelector('.btn')) kids[0].remove();
     const tbl = wrap.querySelector('table'); if (tbl) tbl.closest('.panel').classList.add('item-list');
+    if (tbl && !unlocked()){
+      const items = trainPool(t); const rows = [...tbl.querySelectorAll('tbody tr')];
+      rows.forEach((tr,i)=>{ const it = items[i]; if (!it || isFree(t,it.id)) return;
+        tr.classList.add('locked');
+        const cells = tr.children;
+        if (cells[1]) cells[1].replaceChildren(h('span',{class:'pill lock'}, h('span',{svg:IC_LOCK}), 'Paket'));
+        if (cells[2]) cells[2].replaceChildren(h('button',{class:'btn small', onclick:()=>paywall('Mehr Aufgaben für '+T.name)}, 'Freischalten'));
+      });
+      const nFree = freePool(t).length;
+      if (nFree < items.length) tbl.closest('.panel').before(h('p',{class:'small muted'}, nFree+' von '+items.length+' Aufgaben sind kostenlos. Die übrigen gibt es bald als Aufgabenpaket.'));
+      const doneT = store.get('done', {}); const openFree = freePool(t).filter(x=>!doneT[t+':'+x.id]).length;
+      actions && actions.querySelectorAll('.btn').forEach(b=>{
+        if (b.textContent==='Alle üben') b.textContent = 'Alle Gratis-Aufgaben üben';
+        else if (/^Alle offenen üben/.test(b.textContent)){ if (openFree) b.textContent = 'Alle offenen üben ('+openFree+')'; else b.remove(); }
+      });
+    }
   };
 
   const origResults = renderResults;

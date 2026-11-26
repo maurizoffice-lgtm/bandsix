@@ -106,3 +106,26 @@ body:not(.in-app) .site-foot .logo-mk i{background:#a99dff}body:not(.in-app) .si
   .lp-proof{gap:20px}
 }
 @media (prefers-reduced-motion:reduce){ .mc-main,.mc-1,.mc-2,.lp-badge .dot{animation:none} }
+
+/* about + pricing */
+.lp-about{padding-bottom:0}
+.lp-about-in{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:clamp(24px,5vw,80px);align-items:start}
+.lp-about .lp-h2{margin-bottom:0}
+.lp-about-copy p{font-size:clamp(16px,1.3vw,19px);line-height:1.6;color:var(--ink);margin:0 0 18px}
+.lp-about-copy .lp-note{font-size:14px;color:var(--muted);padding:14px 16px;border-radius:14px;border:1px solid var(--line);background:var(--surface)}
+.lp-pricing{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:stretch}
+.price-card{position:relative;display:flex;flex-direction:column;gap:12px;padding:30px 28px;border-radius:26px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow)}
+.price-card h3{font-size:22px;margin:0}
+.price-card p{color:var(--muted);margin:0}
+.price-card .price b{display:block;font-family:var(--f-display);font-size:38px;letter-spacing:-.03em;line-height:1.1}
+.price-card .price small{color:var(--muted);font-size:13px}
+.price-card ul{margin:4px 0 8px;padding-left:18px;line-height:1.8;flex:1}
+.price-card .lp-btn{align-self:flex-start}
+.price-card.featured{background:var(--night);color:#fff;border-color:transparent;box-shadow:0 0 0 1px rgba(107,91,255,.5),0 40px 80px -40px rgba(107,91,255,.9)}
+.price-card.featured p,.price-card.featured .price small{color:rgba(255,255,255,.7)}
+.price-flag{position:absolute;top:-12px;left:26px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:5px 11px;border-radius:999px;background:linear-gradient(135deg,#6b5bff,#ff7a59);color:#fff}
+.price-flag.soft{background:var(--surface-2,#ecebff);color:var(--accent);border:1px solid var(--line)}
+.lp-btn-dark{color:#fff;background:var(--night)}
+@media (max-width:900px){
+  .lp-about-in,.lp-pricing{grid-template-columns:1fr}
+}
