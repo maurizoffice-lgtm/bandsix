@@ -196,12 +196,41 @@
     if ((m = tok.match(/^(.+)'s$/))){ if (m[1]==='let') return ['let','us']; return IS_WORDS.has(m[1]) ? [m[1], 'is'] : [m[1]+'s']; }
     return [tok.replace(/'/g,'')];
   }
+  // Rough phonetic key (Metaphone-like): words that sound alike get the same key.
+  function phon(w){
+    let x = w.toLowerCase().replace(/[^a-z]/g,'');
+    if (!x) return '';
+    x = x.replace(/^kn|^gn|^pn|^wr/, m=>m[1]).replace(/^x/,'s').replace(/^wh/,'w')
+      .replace(/(.)\1+/g,'$1')
+      .replace(/tch/g,'ch').replace(/t?ion\b|sion/g,'xn').replace(/dg(?=[eiy])/g,'j')
+      .replace(/ph/g,'f').replace(/gh(?![aeiou])/g,'').replace(/ck/g,'k').replace(/c(?=[eiy])/g,'s').replace(/c/g,'k')
+      .replace(/q/g,'k').replace(/x/g,'ks').replace(/z/g,'s').replace(/sh/g,'x').replace(/th/g,'0').replace(/ch/g,'x')
+      .replace(/v/g,'f').replace(/y(?![aeiou])/g,'');
+    const head = x[0]; const tail = x.slice(1).replace(/[aeiouyhw]/g,'');
+    return (/[aeiou]/.test(head) ? 'a' : head) + tail;
+  }
+  function lev(a,b){
+    if (a===b) return 0; const m=a.length, n=b.length; if (!m) return n; if (!n) return m;
+    let prev = Array.from({length:n+1},(_,j)=>j);
+    for (let i=1;i<=m;i++){ const cur=[i]; for (let j=1;j<=n;j++) cur[j]=Math.min(prev[j]+1, cur[j-1]+1, prev[j-1]+(a[i-1]===b[j-1]?0:1)); prev=cur; }
+    return prev[n];
+  }
+  const PHON = new Map(); const ph = w => { let k=PHON.get(w); if (k==null){ k=phon(w); PHON.set(w,k); } return k; };
+  /* How well a heard word matches the expected one, from 0 to 1. Generic rules instead of single cases:
+     same word, a known homophone, the same sound written differently, or a near spelling. */
   function softEq(a,b){
     if (a===b) return 1;
     const ga = HOMO_MAP[a], gb = HOMO_MAP[b];
     if (ga && gb){ for (const g of ga) if (gb.has(g)) return 1; }
-    // plural or 3rd-person "s" heard or dropped: usually a recognition slip, counts mostly
-    if (a.length>3 && b.length>3 && (a===b+'s' || b===a+'s')) return 0.75;
+    if (a.length<2 || b.length<2) return 0;
+    const pa = ph(a), pb = ph(b);
+    // sounds the same: the recogniser only chose another spelling
+    if (pa && pa===pb && Math.abs(a.length-b.length)<=2) return 1;
+    // plural or 3rd-person "s" heard or dropped
+    if (a.length>3 && b.length>3 && (a===b+'s' || b===a+'s' || a===b+'es' || b===a+'es')) return 0.75;
+    const L = Math.max(a.length,b.length);
+    if (L>=4 && lev(a,b)/L <= 0.2) return 0.75;               // near spelling
+    if (L>=5 && pa && pb && lev(pa,pb)<=1 && lev(a,b)/L <= 0.34) return 0.5; // close in sound
     return 0;
   }
   function splitCompounds(hyp, refSet){
@@ -231,6 +260,10 @@
     for (let i=n-1;i>=0;i--) for (let j=m-1;j>=0;j--){ const e=softEq(R[i].c,H[j]); d[i][j] = Math.max(d[i+1][j], d[i][j+1], e ? d[i+1][j+1]+e : 0); }
     const got = new Array(n).fill(0); let i=0, j=0, used=0;
     while (i<n && j<m){ const e=softEq(R[i].c,H[j]); if (e && Math.abs(d[i][j]-(d[i+1][j+1]+e))<1e-9){ got[i]=e; i++; j++; used++; } else if (d[i+1][j]>=d[i][j+1]) i++; else j++; }
+    // words said in a different place still count half (meaning kept, order changed)
+    const usedH = new Array(m).fill(false);
+    { let i2=0, j2=0; while (i2<n && j2<m){ const e=softEq(R[i2].c,H[j2]); if (e && Math.abs(d[i2][j2]-(d[i2+1][j2+1]+e))<1e-9){ usedH[j2]=true; i2++; j2++; } else if (d[i2+1][j2]>=d[i2][j2+1]) i2++; else j2++; } }
+    for (let k=0;k<n;k++){ if (got[k]) continue; const j3 = H.findIndex((w,jj)=>!usedH[jj] && softEq(R[k].c,w)>=0.75); if (j3>=0){ got[k]=0.5; usedH[j3]=true; used++; } }
     const matched = got.reduce((a,b)=>a+b,0);
     const extra = Math.max(0, m - used);
     const acc = Math.max(0, Math.min(1, (matched - extra*0.25)/n));
@@ -239,6 +272,16 @@
     // a reference word counts as hit when all of its canonical parts were heard
     const hit = refTok.map((_,k)=>{ const parts = R.map((x,idx)=>x.i===k?idx:-1).filter(x=>x>=0); return parts.every(p=>got[p]>0); });
     return {score, acc, hit};
+  };
+
+  // Tell the speech recogniser which sentence is expected, so it can prefer the matching alternative.
+  const origPlay = play;
+  play = function(lines){
+    try {
+      const u = (VIEW==='run' && RUN) ? curUnit() : null;
+      window.bandsixDictHint = u && u.type==='repeat' ? (lines||[]).map(l=>l.text).join(' ') : null;
+    } catch(e){ window.bandsixDictHint = null; }
+    return origPlay.apply(this, arguments);
   };
 
   /* ---------- views ---------- */

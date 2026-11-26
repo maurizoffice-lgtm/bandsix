@@ -19,6 +19,32 @@ function speechRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
   return w.SpeechRecognition || w.webkitSpeechRecognition || null;
 }
 
+/** Rough word set for comparing an alternative with the expected sentence. */
+function bag(s: string): string[] {
+  return s.toLowerCase().replace(/[^a-z0-9' ]+/g, ' ').split(/\s+/).filter(Boolean);
+}
+/**
+ * When the app knows what the speaker is expected to say (Listen and Repeat), it sets
+ * window.bandsixDictHint. Among the recogniser's alternatives we keep the one closest to that
+ * sentence, so an acoustically equal but differently written guess does not count against the
+ * speaker. Without a hint the recogniser's own best guess is used.
+ */
+function pickAlternative(r: any): string {
+  const first = String(r?.[0]?.transcript || '').trim();
+  const hint = (window as any).bandsixDictHint as string | undefined;
+  if (!hint || !r || r.length < 2) return first;
+  const ref = new Set(bag(hint));
+  let best = first, bestScore = -Infinity;
+  for (let k = 0; k < r.length; k++) {
+    const t = String(r[k]?.transcript || '').trim();
+    if (!t) continue;
+    const w = bag(t);
+    const score = w.filter((x) => ref.has(x)).length - 0.25 * w.filter((x) => !ref.has(x)).length - k * 0.01;
+    if (score > bestScore) { bestScore = score; best = t; }
+  }
+  return best;
+}
+
 class BrowserDictation {
   private rec: SpeechRecognitionLike | null = null;
   private running = false;
@@ -45,6 +71,7 @@ class BrowserDictation {
         rec.lang = 'en-US';
         rec.continuous = true;
         rec.interimResults = true;
+        try { (rec as any).maxAlternatives = 5; } catch { /* not supported */ }
         rec.onstart = () => {
           this.running = true;
           this.stateCb?.({ state: 'listening' });
@@ -54,7 +81,7 @@ class BrowserDictation {
           let interim = '';
           for (let i = e.resultIndex; i < e.results.length; i++) {
             const r = e.results[i];
-            const text = String(r[0]?.transcript || '').trim();
+            const text = pickAlternative(r);
             if (!text) continue;
             if (r.isFinal) this.finalCb?.({ text });
             else interim += (interim ? ' ' : '') + text;
