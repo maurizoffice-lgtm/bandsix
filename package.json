@@ -1,0 +1,28 @@
+{
+  "name": "bandsix",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "import-prototype": "node scripts/import-prototype.mjs",
+    "dev": "vite",
+    "build": "node scripts/import-prototype.mjs && tsc --noEmit && vite build",
+    "pretest": "node scripts/import-prototype.mjs",
+    "predev": "node scripts/import-prototype.mjs",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "deploy:cloudflare": "npm run build && npx wrangler pages deploy dist"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261125.1",
+    "@types/node": "^26.6.11",
+    "typescript": "^7.0.2",
+    "vite": "^8.4.0",
+    "vitest": "^5.1.2"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.14.0",
+    "@fontsource-variable/bricolage-grotesque": "^5.3.0",
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0"
+  }
+}
