@@ -604,6 +604,59 @@
       opts.right || null);
   }
 
+
+  /* ---------- helper block next to Writing and Speaking tasks (training only) ---------- */
+  const HELP = {
+    email:{title:'Redemittel für die E-Mail', insert:true, groups:[
+      ['Einstieg', ['Dear Professor Miller,','I hope this email finds you well.','I am writing to ask whether …','I am reaching out regarding …','Thank you for getting back to me so quickly.']],
+      ['Anliegen und Bitten', ['Would it be possible to …?','I would really appreciate it if you could …','Could you let me know whether …?','I was wondering if you might be able to …']],
+      ['Erklären und begründen', ['To give you some context, …','The main reason is that …','Unfortunately, …','As a result, …']],
+      ['Vorschläge', ['One option might be to …','Alternatively, we could …','If it suits you, I would be happy to …']],
+      ['Abschluss', ['Thank you in advance for your help.','Please let me know if you need any further information.','I look forward to hearing from you.','Best regards,','Kind regards,']]],
+      tips:['Jeden der drei Punkte aus der Aufgabe in einem eigenen kurzen Absatz abhaken.','Ton an den Empfänger anpassen: Professorin formell, Mitbewohner locker.','Rund 120 bis 180 Wörter reichen. Die letzte Minute zum Korrekturlesen nutzen.']},
+    disc:{title:'Redemittel für die Diskussion', insert:true, groups:[
+      ['Position beziehen', ['In my view, …','I firmly believe that …','While both sides raise valid points, I would argue that …','From my perspective, the most compelling argument is …']],
+      ['Auf Beiträge eingehen', ['I agree with [Name] that …, but …','[Name] makes an interesting point about …; however, …','Building on [Name]’s idea, …','Unlike [Name], I think …']],
+      ['Begründen', ['The main reason is that …','This matters because …','A factor that is often overlooked is …','What is more, …']],
+      ['Beispiel', ['For instance, …','A good example of this is …','In my own experience, …']],
+      ['Abschluss', ['All things considered, …','Ultimately, …','For these reasons, I believe …']]],
+      tips:['Position gleich im ersten Satz nennen.','Einen der beiden Beiträge mit Namen aufgreifen.','Ein neues Argument bringen, das noch niemand genannt hat, und es mit einem konkreten Beispiel stützen.','Mindestens 100 Wörter.']},
+    interview:{title:'Redemittel für das Interview', insert:false, groups:[
+      ['Sofort einsteigen', ['That’s a great question. I’d say …','Honestly, I think …','For me personally, …']],
+      ['Gliedern', ['There are two main reasons. First, … Second, …','On the one hand, … On the other hand, …','The biggest advantage is …']],
+      ['Beispiel', ['For example, last semester I …','I remember when …','A good example from my own life is …']],
+      ['Kurz Zeit gewinnen', ['Let me think about that for a second.','That’s something I’ve thought about quite a bit.']],
+      ['Abrunden', ['So overall, I’d say …','That’s why I believe …']]],
+      tips:['Sofort anfangen, es gibt keine Vorbereitungszeit.','Aufbau: Antwort, Grund, Beispiel, Fazit.','Die 45 Sekunden nutzen. Kurze Füllwörter sind normal, lange Pausen vermeiden.']},
+    repeat:{title:'Tipps zum Nachsprechen', insert:false, groups:[],
+      tips:['Auf Sinneinheiten hören, nicht Wort für Wort.','Satzmelodie und Betonung nachahmen.','Lieber vollständig als schnell.','Kleine Wörter wie the, to oder has been nicht verschlucken. Sie zählen mit.']},
+    bas:{title:'Tipps zum Satzbau', insert:false, groups:[
+      ['Muster', ['Do you know where the library is?','Could you tell me when the class starts?','I wonder whether she has finished.']]],
+      tips:['Zuerst Subjekt und Verb finden.','Direkte Frage: Hilfsverb nach vorne.','Indirekte Frage (Do you know where …): danach normale Wortstellung, kein Hilfsverb vorne.','Eine Wortgruppe kann übrig bleiben.']}
+  };
+  function insertPhrase(main, text){
+    const ta = main.querySelector('textarea'); if (!ta) return;
+    const st = ta.selectionStart ?? ta.value.length, en = ta.selectionEnd ?? ta.value.length;
+    const before = ta.value.slice(0, st), after = ta.value.slice(en);
+    const clean = text.replace(/ …\??$/,' ').replace(/…/g,'');
+    const sep = before && !/[\s\n]$/.test(before) ? ' ' : '';
+    ta.value = before + sep + clean + after;
+    const pos = (before + sep + clean).length; ta.focus(); ta.setSelectionRange(pos, pos);
+    ta.dispatchEvent(new Event('input', {bubbles:true}));
+  }
+  function helperBlock(type, main){
+    const H = HELP[type]; if (!H) return null;
+    let open = window.innerWidth > 1000; try { const v = sessionStorage.getItem('bandsix.helper'); if (v) open = v==='1'; } catch(e){}
+    const det = h('details',{class:'helper', open: open ? '' : null, ontoggle:()=>{ try{ sessionStorage.setItem('bandsix.helper', det.open?'1':'0'); }catch(e){} }},
+      h('summary',null, h('span',{class:'helper-ic', 'aria-hidden':'true'}, '✦'), H.title),
+      h('div',{class:'helper-body'},
+        H.insert ? h('p',{class:'small muted'}, 'Antippen fügt die Wendung an der Cursorposition ein.') : null,
+        H.groups.map(([g, list])=>h('div',{class:'helper-group'}, h('b',null,g),
+          h('div',{class:'helper-list'}, list.map(t => H.insert ? h('button',{class:'phrase', type:'button', onclick:()=>insertPhrase(main, t)}, t) : h('span',{class:'phrase static'}, t))))),
+        h('div',{class:'helper-group'}, h('b',null,'Tipps'), h('ul',null, H.tips.map(t=>h('li',null,t))))));
+    return det;
+  }
+
   const origRenderUnit = renderUnit;
   renderUnit = function(){
     origRenderUnit();
@@ -625,6 +678,13 @@
         h('div',{class:'howto-body'}, h('b',null,'So funktioniert es'), h('p',null, intro.map(n=>n.textContent).join('').trim()), tips ? h('ul',null, [...tips.children].map(li=>h('li',null, li.textContent))) : null));
     }
     const foot = wrap.querySelector(':scope > .foot'); if (foot) foot.classList.add('run-foot');
+    if (RUN.mode==='train' && HELP[u.type]){
+      const kids = [...wrap.children].filter(n=>n!==banner && n!==foot);
+      const main = h('div',{class:'stack run-main'}); kids.forEach(n=>main.append(n));
+      const aside = helperBlock(u.type, main);
+      const grid = h('div',{class:'run-grid'}, main, aside);
+      if (foot) foot.before(grid); else wrap.append(grid);
+    }
   };
 
   const origIntro = renderSectionIntro;

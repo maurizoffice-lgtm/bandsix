@@ -561,3 +561,27 @@ tr.locked td:first-child{opacity:.55}
 :root[data-theme="dark"] .tcard-ets b{color:#b5a9ff!important}
 @media (max-width:760px){ .ets-more{display:none} }
 .ets-panel{color:var(--ink)} .ets-panel summary>span:nth-child(2){color:var(--ink)}
+
+/* helper block beside Writing/Speaking tasks */
+.run-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,360px);gap:22px;align-items:start}
+.run-main{min-width:0}
+.helper{position:sticky;top:90px;max-height:calc(100vh - 110px);overflow:auto;border-radius:20px;background:var(--surface);border:1px solid var(--line);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:var(--shadow);color:var(--ink)}
+.helper summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:16px 18px;font-weight:700}
+.helper summary::-webkit-details-marker{display:none}
+.helper summary::after{content:"+";margin-left:auto;font-size:20px;font-weight:400;color:var(--muted);transition:transform .2s}
+.helper[open] summary::after{transform:rotate(45deg)}
+.helper-ic{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;font-size:14px;color:#fff;background:linear-gradient(135deg,#6b5bff,#ff7a59)}
+.helper-body{padding:0 18px 18px;display:flex;flex-direction:column;gap:14px}
+.helper-body>p{margin:0}
+.helper-group>b{display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+.helper-list{display:flex;flex-direction:column;gap:6px}
+.phrase{all:unset;box-sizing:border-box;display:block;cursor:pointer;font-size:14px;line-height:1.4;padding:8px 11px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink);transition:background .15s,border-color .15s}
+.phrase:hover,.phrase:focus-visible{border-color:color-mix(in srgb,var(--accent) 55%,transparent);background:color-mix(in srgb,var(--accent) 12%,var(--surface-2))}
+.phrase.static{cursor:default}
+.phrase.static:hover{border-color:var(--line);background:var(--surface-2)}
+.helper ul{margin:0;padding-left:18px;font-size:14px;line-height:1.55}
+.helper li{margin:3px 0}
+@media (max-width:1000px){
+  .run-grid{grid-template-columns:1fr}
+  .helper{position:static;max-height:none;order:-1}
+}
