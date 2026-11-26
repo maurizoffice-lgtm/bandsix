@@ -78,6 +78,25 @@ document.querySelectorAll<HTMLAnchorElement>('.logo').forEach((a) =>
 );
 window.addEventListener('bandsix:landing', () => { history.replaceState(null, '', location.pathname); showLanding(); window.scrollTo(0, 0); });
 
+/**
+ * Browsers (Safari in particular) may keep serving an old index.html for a while after a deploy.
+ * Compare with the live build id and, if it differs, load the page under a fresh URL once.
+ */
+async function ensureLatest() {
+  if (import.meta.env.DEV) return;
+  try {
+    const r = await fetch(`${BASE}version.json?t=${Date.now()}`, { cache: 'no-store' });
+    if (!r.ok) return;
+    const { id } = (await r.json()) as { id?: string };
+    if (!id || id === __BUILD_ID__) return;
+    const guard = `bandsix.reloaded.${id}`;
+    if (sessionStorage.getItem(guard)) return;
+    sessionStorage.setItem(guard, '1');
+    location.replace(`${location.pathname}?v=${id}${location.hash}`);
+  } catch { /* offline or storage blocked: keep the current version */ }
+}
+void ensureLatest();
+
 let entered = false;
 try { entered = localStorage.getItem(ENTERED_KEY) === '1'; } catch { /* ignore */ }
 if (location.hash === '#dashboard' || location.hash === '#app' || (entered && location.hash !== '#start')) void startApp();
