@@ -535,3 +535,10 @@ tr.locked td:first-child{opacity:.55}
 }
 .train-nav .seg-lg{background:rgba(255,255,255,.94);box-shadow:0 10px 30px -16px rgba(0,0,0,.35)}
 :root[data-theme="dark"] .train-nav .seg-lg{background:rgba(16,18,42,.94)}
+
+/* Listen and Repeat: word comparison */
+.diff{display:inline;line-height:2}
+.diff span{margin-right:4px;padding:2px 5px;border-radius:6px}
+.diff .hit{background:color-mix(in srgb,var(--good) 14%,transparent);color:var(--good)}
+.diff .miss{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn);text-decoration:none;border-bottom:2px dotted currentColor}
+.diff .pill{margin-left:6px}

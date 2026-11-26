@@ -165,6 +165,82 @@
   const origBuildTrain = buildTrain;
   buildTrain = function(type, ids){ return origBuildTrain(type, ids || freePool(type).map(x=>x.id)); };
 
+
+  /* ---------- fairer Listen-and-Repeat scoring ----------
+     The browser's speech recognition writes contractions, numbers and compounds its own way
+     ("there's" for "there is", "health care" for "healthcare", "OK" for "okay"). Those are not
+     speaking mistakes, so both texts are brought into one canonical form before comparing.
+     Returns hit[] aligned with the engine's words(ref) so the existing diff display keeps working. */
+  const IS_WORDS = new Set(['there','here','it','that','what','where','who','how','when','why','he','she','this','everyone','everything','someone','something','nobody','nothing','one','today','tomorrow','dinner','lunch','class','room','meeting']);
+  const NT = {"can't":['can','not'],"cannot":['can','not'],"won't":['will','not'],"shan't":['shall','not'],"ain't":['is','not']};
+  const SAME = {okay:'ok', alright:'all right', 'e-mail':'email', till:'until', 'til':'until', gonna:'going to', wanna:'want to', gotta:'got to', percent:'percent', cause:'because', 'cuz':'because'};
+  const HOMO = [['to','too','two'],['there','their'],['for','four'],['know','no'],['right','write'],['hear','here'],['weather','whether'],['by','buy','bye'],['its','it'],['your','you'],['would','had'],['is','has'],['a','an','the'],['in','on']];
+  const HOMO_MAP = {}; HOMO.forEach((g,i)=>g.forEach(w=>{ (HOMO_MAP[w] ||= new Set()).add(i); }));
+  const FILLER = new Set(['uh','um','uhm','er','erm','ah','hmm','mm','mhm']);
+  // Display tokens: the sentence as written (case and punctuation kept). Used by the engine's diff view.
+  words = function(str){ return String(str||'').trim().split(/\s+/).filter(Boolean); };
+  function subTokens(tok){
+    return tok.toLowerCase().replace(/([a-z])-(?=[a-z])/g,'$1').replace(/(\d+):(\d+)/g,(m,a,b)=>a+' '+(b==='00'?'':b)).replace(/\d+/g,m=>' '+numWord(m)+' ')
+      .replace(/[’‘`]/g,"'").replace(/[^a-z' ]+/g,' ').split(/\s+/).map(w=>w.replace(/^'+|'+$/g,'')).filter(Boolean);
+  }
+  function canon(tok){
+    if (SAME[tok]) return SAME[tok].split(' ');
+    if (NT[tok]) return NT[tok].slice();
+    let m;
+    if ((m = tok.match(/^(.+)n't$/))) return [m[1], 'not'];
+    if ((m = tok.match(/^(.+)'re$/))) return [m[1], 'are'];
+    if ((m = tok.match(/^(.+)'ve$/))) return [m[1], 'have'];
+    if ((m = tok.match(/^(.+)'ll$/))) return [m[1], 'will'];
+    if ((m = tok.match(/^(.+)'d$/))) return [m[1], 'would'];
+    if ((m = tok.match(/^(.+)'m$/))) return [m[1], 'am'];
+    if ((m = tok.match(/^(.+)'s$/))){ if (m[1]==='let') return ['let','us']; return IS_WORDS.has(m[1]) ? [m[1], 'is'] : [m[1]+'s']; }
+    return [tok.replace(/'/g,'')];
+  }
+  function softEq(a,b){
+    if (a===b) return 1;
+    const ga = HOMO_MAP[a], gb = HOMO_MAP[b];
+    if (ga && gb){ for (const g of ga) if (gb.has(g)) return 1; }
+    // plural or 3rd-person "s" heard or dropped: usually a recognition slip, counts mostly
+    if (a.length>3 && b.length>3 && (a===b+'s' || b===a+'s')) return 0.75;
+    return 0;
+  }
+  function splitCompounds(hyp, refSet){
+    const out = [];
+    for (const w of hyp){
+      if (refSet.has(w) || w.length<6){ out.push(w); continue; }
+      let done = false;
+      for (let k=3;k<=w.length-3 && !done;k++){ const a=w.slice(0,k), b=w.slice(k); if (refSet.has(a) && refSet.has(b)){ out.push(a,b); done=true; } }
+      if (!done) out.push(w);
+    }
+    return out;
+  }
+  repeatScore = function(ref, said){
+    const refTok = words(ref);
+    const R = []; refTok.forEach((t,i)=>subTokens(t).forEach(st=>canon(st).forEach(c=>R.push({c, i}))));
+    // join compounds the recogniser split apart ("health care" -> healthcare) by also offering the reverse split
+    const refSet = new Set(R.map(x=>x.c));
+    let H = [];
+    words(said).forEach(t=>subTokens(t).forEach(st=>canon(st).forEach(c=>{ if (!FILLER.has(c)) H.push(c); })));
+    if (!H.length) return {score:0, acc:0, hit:new Array(refTok.length).fill(false)};
+    H = splitCompounds(H, refSet);
+    // merge two heard words if together they form one reference word
+    const merged = []; for (let j=0;j<H.length;j++){ if (j+1<H.length && !refSet.has(H[j]) && refSet.has(H[j]+H[j+1])){ merged.push(H[j]+H[j+1]); j++; } else merged.push(H[j]); }
+    H = merged;
+    const n=R.length, m=H.length;
+    const d = Array.from({length:n+1},()=>new Float64Array(m+1));
+    for (let i=n-1;i>=0;i--) for (let j=m-1;j>=0;j--){ const e=softEq(R[i].c,H[j]); d[i][j] = Math.max(d[i+1][j], d[i][j+1], e ? d[i+1][j+1]+e : 0); }
+    const got = new Array(n).fill(0); let i=0, j=0, used=0;
+    while (i<n && j<m){ const e=softEq(R[i].c,H[j]); if (e && Math.abs(d[i][j]-(d[i+1][j+1]+e))<1e-9){ got[i]=e; i++; j++; used++; } else if (d[i+1][j]>=d[i][j+1]) i++; else j++; }
+    const matched = got.reduce((a,b)=>a+b,0);
+    const extra = Math.max(0, m - used);
+    const acc = Math.max(0, Math.min(1, (matched - extra*0.25)/n));
+    const perfect = got.every(x=>x>=1) && extra===0;
+    const score = perfect ? 5 : acc>=0.85 ? 4 : acc>=0.65 ? 3 : acc>=0.4 ? 2 : acc>0 ? 1 : 0;
+    // a reference word counts as hit when all of its canonical parts were heard
+    const hit = refTok.map((_,k)=>{ const parts = R.map((x,idx)=>x.i===k?idx:-1).filter(x=>x>=0); return parts.every(p=>got[p]>0); });
+    return {score, acc, hit};
+  };
+
   /* ---------- views ---------- */
   function viewStart(){
     const out = [];
